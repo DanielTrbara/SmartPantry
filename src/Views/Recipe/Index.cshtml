@@ -1,0 +1,230 @@
+@model src.Models.RecipeIndexViewModel
+@{
+    ViewData["Title"] = "Kochbuch";
+}
+
+<div class="space-y-12">
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div class="max-w-2xl">
+            <h1 class="text-4xl sm:text-5xl font-black text-[#1e1915] tracking-tight leading-none">
+                Inspirational <br>
+                <span class="text-[#ff5c26]">Gusto Cookbook.</span>
+            </h1>
+            <p class="mt-4 text-base text-stone-500 leading-relaxed max-w-md">
+                Stöbere durch deine Rezepte oder füge deiner digitalen Sammlung neue Kreationen hinzu.
+            </p>
+        </div>
+    </div>
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="p-4 rounded-xl bg-rose-50 border border-rose-100 text-rose-700 text-xs font-bold flex items-center space-x-3">
+            <span>⚠️</span>
+            <span>@TempData["ErrorMessage"]</span>
+        </div>
+    }
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="p-4 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-800 text-xs font-bold flex items-center space-x-3">
+            <span>✅</span>
+            <span>@TempData["SuccessMessage"]</span>
+        </div>
+    }
+
+    <div class="bg-white rounded-2xl border-2 border-[#1e1915] p-6 shadow-md">
+        <div class="mb-6">
+            <h2 class="text-lg font-bold text-[#1e1915] uppercase tracking-wider font-mono">// Neues Rezept eintragen</h2>
+            <p class="text-xs text-stone-400 mt-1">Erweitere dein Kochbuch um ein neues Gericht mitsamt seinen Standard-Zutaten.</p>
+        </div>
+
+        <form asp-controller="Recipe" asp-action="Add" method="POST" class="space-y-5">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="md:col-span-1 space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Rezeptname</label>
+                        <input type="text" name="RecipeName" required placeholder="z.B. Pancakes"
+                               class="block w-full px-4 py-3 border border-stone-200 rounded-xl bg-[#fcfbfa] text-[#1e1915] font-semibold focus:outline-none focus:border-[#ff5c26] text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Zubereitung / Anleitung</label>
+                        <textarea name="Description" required rows="6" placeholder="1. Zutaten mischen...&#10;2. In die Pfanne geben..."
+                                  class="block w-full px-4 py-3 border border-stone-200 rounded-xl bg-[#fcfbfa] text-[#1e1915] font-semibold focus:outline-none focus:border-[#ff5c26] text-sm resize-none"></textarea>
+                    </div>
+                </div>
+
+                <div class="md:col-span-2 flex flex-col justify-between border-t md:border-t-0 md:border-l border-stone-100 pt-6 md:pt-0 md:pl-6">
+                    <div>
+                        <label class="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Standard-Zutaten</label>
+                        
+                        <div id="formIngredientsContainer" class="space-y-3 max-h-64 overflow-y-auto pr-1">
+                            <div class="flex items-center gap-3 bg-[#fcfbfa] p-2.5 rounded-xl border border-stone-100 ingredient-row">
+                                <input type="text" name="Ingredients[0].IngredientName" required placeholder="Zutat (z.B. Mehl)"
+                                       class="flex-1 px-3 py-2 bg-white border border-stone-200 rounded-lg text-sm font-semibold focus:outline-none focus:border-[#ff5c26]">
+                                <input type="number" name="Ingredients[0].DefaultAmount" required min="1" placeholder="Menge (g/stk)"
+                                       class="w-32 px-3 py-2 bg-white border border-stone-200 rounded-lg text-sm font-mono font-bold text-right focus:outline-none focus:border-[#ff5c26]">
+                                <button type="button" onclick="this.parentElement.remove()" class="text-stone-400 hover:text-rose-600 font-mono text-sm px-2">X</button>
+                            </div>
+                        </div>
+
+                        <button type="button" onclick="addIngredientRow()" class="mt-3 text-xs font-bold uppercase font-mono tracking-wider text-[#ff5c26] hover:text-[#e04b19] transition">
+                            + Zutat hinzufügen
+                        </button>
+                    </div>
+
+                    <div class="pt-6 border-t border-stone-100 mt-4 flex justify-end">
+                        <button type="submit" class="px-6 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider text-white bg-[#1e1915] hover:bg-[#ff5c26] transition shadow-md">
+                            💾 Rezept im Kochbuch speichern
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div class="border-t-2 border-[#1e1915] pt-10">
+        @if (!Model.Recipes.Any())
+        {
+            <div class="bg-white rounded-2xl border border-[#f1eee7] p-16 text-center shadow-sm">
+                <span class="text-5xl inline-block mb-4">📖</span>
+                <p class="text-lg font-bold text-[#1e1915]">Das Kochbuch ist noch leer.</p>
+            </div>
+        }
+        else
+        {
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                @foreach (var recipe in Model.Recipes)
+                {
+                    <div class="bg-white rounded-2xl border-2 border-[#1e1915] p-6 shadow-md flex flex-col justify-between hover:shadow-lg transition-all duration-200">
+                        <div>
+                            <div class="flex items-start justify-between mb-4">
+                                <h3 class="text-xl font-black text-[#1e1915] tracking-tight">
+                                    @recipe.RecipeName
+                                </h3>
+                                <span class="text-xs font-mono font-bold uppercase tracking-wider text-stone-400 bg-stone-50 px-2.5 py-1 rounded-md border border-stone-100">
+                                    #@recipe.RecipeID
+                                </span>
+                            </div>
+
+                            <div class="text-xs font-bold text-[#ff5c26] uppercase tracking-widest font-mono mb-3">// Benötigte Zutaten</div>
+
+                            <ul class="mb-6 space-y-2">
+                                @if (recipe.Ingredients.Any())
+                                {
+                                    foreach (var ing in recipe.Ingredients)
+                                    {
+                                        <li class="flex items-center justify-between text-sm border-b border-stone-50 pb-1.5">
+                                            <span class="font-semibold text-stone-700">@ing.Name</span>
+                                            <span class="font-mono text-xs font-bold text-[#1e1915]">
+                                                @ing.DefaultAmount <span class="text-stone-400 font-sans font-medium">@ing.Unit</span>
+                                            </span>
+                                        </li>
+                                    }
+                                }
+                                else
+                                {
+                                    <li class="text-xs italic text-stone-400">Keine Zutaten hinterlegt.</li>
+                                }
+                            </ul>
+
+                            <div class="text-xs font-bold text-stone-500 uppercase tracking-widest font-mono mb-2">// Zubereitung</div>
+                            <p class="text-sm text-stone-600 leading-relaxed bg-[#fcfbfa] p-4 rounded-xl border border-stone-100 whitespace-pre-line">
+                                @recipe.Description
+                            </p>
+                        </div>
+
+                        @{
+                            var jsonIngredients = System.Text.Json.JsonSerializer.Serialize(recipe.Ingredients);
+                        }
+
+                        <div class="mt-6 pt-4 border-t border-stone-100">
+                            <button type="button" 
+                                    onclick="openCookModal('@recipe.RecipeID', '@recipe.RecipeName', @jsonIngredients)"
+                                    class="w-full py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider text-white bg-[#ff5c26] hover:bg-[#e04b19] transition shadow-sm active:scale-[0.98]">
+                                Gericht jetzt Kochen
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<div id="cookModal" class="hidden fixed inset-0 bg-[#1e1915]/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl border-2 border-[#1e1915] max-w-lg w-full p-6 shadow-xl">
+        <div class="flex items-center justify-between border-b border-stone-100 pb-3 mb-4">
+            <h3 id="modalRecipeName" class="text-lg font-black text-[#1e1915] tracking-tight">Rezept kochen</h3>
+            <button type="button" onclick="closeCookModal()" class="text-stone-400 hover:text-[#1e1915] text-sm font-bold font-mono">X</button>
+        </div>
+
+        <p class="text-xs text-stone-500 mb-4">
+            Passe die tatsächlich verbrauchten Mengen an, falls du Zutaten ersetzt oder reduziert hast:
+        </p>
+
+        <form action="/Recipe/Cook" method="POST" class="space-y-4">
+            <input type="hidden" name="RecipeId" id="modalRecipeId">
+            <div id="modalIngredientsContainer" class="space-y-3 max-h-60 overflow-y-auto pr-1"></div>
+
+            <div class="flex space-x-3 pt-4 border-t border-stone-100">
+                <button type="button" onclick="closeCookModal()" class="w-1/3 py-3 rounded-xl text-xs font-extrabold uppercase bg-stone-100 text-stone-600 hover:bg-stone-200 transition">Abbrechen</button>
+                <button type="submit" class="flex-1 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider text-white bg-[#ff5c26] hover:bg-[#e04b19] transition shadow-md">🍳 Verbrauch buchen</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        var cookModal = document.getElementById("cookModal");
+        var modalRecipeName = document.getElementById("modalRecipeName");
+        var modalRecipeId = document.getElementById("modalRecipeId");
+        var container = document.getElementById("modalIngredientsContainer");
+        var formContainer = document.getElementById("formIngredientsContainer");
+        
+        // Zähler für die Erstellung neuer Rezeptzeilen
+        var ingredientIndex = 1;
+
+        function addIngredientRow() {
+            var row = document.createElement("div");
+            row.className = "flex items-center gap-3 bg-[#fcfbfa] p-2.5 rounded-xl border border-stone-100 ingredient-row";
+            row.innerHTML = `
+                <input type="text" name="Ingredients[${ingredientIndex}].IngredientName" required placeholder="Zutat"
+                       class="flex-1 px-3 py-2 bg-white border border-stone-200 rounded-lg text-sm font-semibold focus:outline-none focus:border-[#ff5c26]">
+                <input type="number" name="Ingredients[${ingredientIndex}].DefaultAmount" required min="1" placeholder="Menge"
+                       class="w-32 px-3 py-2 bg-white border border-stone-200 rounded-lg text-sm font-mono font-bold text-right focus:outline-none focus:border-[#ff5c26]">
+                <button type="button" onclick="this.parentElement.remove()" class="text-stone-400 hover:text-rose-600 font-mono text-sm px-2">X</button>
+            `;
+            formContainer.appendChild(row);
+            ingredientIndex++;
+        }
+
+        function openCookModal(id, name, ingredients) {
+            modalRecipeId.value = id;
+            modalRecipeName.innerText = name + " kochen";
+            container.innerHTML = ""; 
+
+            ingredients.forEach(function(ing, index) {
+                var row = document.createElement("div");
+                row.className = "flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#fcfbfa] p-3 rounded-xl border border-stone-100";
+                row.innerHTML = `
+                    <div class="flex-1 space-y-1">
+                        <input type="text" name="Ingredients[${index}].IngredientName" value="${ing.Name}" required
+                            class="bg-transparent border-b border-transparent hover:border-stone-300 focus:border-[#ff5c26] focus:outline-none font-bold text-sm text-[#1e1915] w-full py-0.5">
+                        <span class="text-[10px] text-stone-400 font-mono block">Standard: ${ing.DefaultAmount} ${ing.Unit}</span>
+                    </div>
+                    <input type="hidden" name="Ingredients[${index}].IngredientID" value="${ing.IngredientID}">
+                    <div class="flex items-center border border-stone-200 rounded-lg overflow-hidden bg-white focus-within:border-[#ff5c26]">
+                        <input type="number" name="Ingredients[${index}].ActualAmount" value="${ing.DefaultAmount}" min="0" required
+                            class="w-20 px-2 py-1.5 text-right font-mono text-sm font-bold focus:outline-none">
+                        <input type="text" name="Ingredients[${index}].Unit" value="${ing.Unit}" required
+                            class="w-12 bg-stone-50 px-1 py-1.5 text-xs font-bold text-stone-500 border-l border-stone-100 text-center focus:bg-white focus:outline-none uppercase">
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+            cookModal.classList.remove("hidden");
+        }
+
+        function closeCookModal() { cookModal.classList.add("hidden"); }
+    </script>
+}

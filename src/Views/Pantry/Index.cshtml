@@ -1,0 +1,300 @@
+@model src.Models.PantryIndexViewModel
+@{
+    ViewData["Title"] = "Meine Vorratskammer";
+}
+
+<div class="space-y-12">
+    <!-- Hero-Header Bereich -->
+    <div class="max-w-2xl">
+        <h1 class="text-4xl sm:text-5xl font-black text-[#1e1915] tracking-tight leading-none">
+            A Chef In Every <br>
+            <span class="text-[#ff5c26]">Tasty Pantry.</span>
+        </h1>
+        <p class="mt-4 text-base text-stone-500 leading-relaxed max-w-md">
+            Verwalte deine frischen Zutaten, behalte Mindesthaltbarkeitsdaten im Blick und koche perfekt abgestimmte Gerichte.
+        </p>
+    </div>
+
+    <!-- Dynamischer Formular-Container für Hinzufügen / Bearbeiten -->
+    <div id="addFormContainer" class="hidden bg-white rounded-2xl border-2 border-[#1e1915] p-6 shadow-md transition-all duration-300">
+        <h3 id="formTitle" class="text-lg font-bold text-[#1e1915] mb-4 uppercase tracking-wider font-mono">// Neue Zutat einlagern</h3>
+        
+        <!-- onsubmit stellt sicher, dass deaktivierte Felder vor dem Senden entsperrt werden -->
+        <form id="pantryForm" action="/Pantry/Add" method="POST" onsubmit="inputSearch.disabled = false;" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <input type="hidden" name="pantryId" id="formPantryId" value="0">
+            
+            <!-- Zutaten-Auswahlfeld mit Autocomplete-Datalist -->
+            <div class="relative">
+                <label class="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Zutat wählen</label>
+                <div class="relative flex items-center">
+                    <span class="absolute left-4 text-stone-400 pointer-events-none text-sm">🔍</span>
+                    <input list="ingredientsList" name="ingredientSearch" id="ingredientInput" required placeholder="z.B. Magerquark"
+                        class="w-full pl-10 pr-4 py-3 border border-stone-200 rounded-xl bg-[#fcfbfa] text-sm font-semibold focus:outline-none focus:border-[#ff5c26] transition-all appearance-none">
+                    <input type="hidden" name="ingredientId" id="hiddenIngredientId" value="0">
+                </div>
+
+                <datalist id="ingredientsList">
+                    @if (Model.AvailableIngredients != null)
+                    {
+                        foreach (var ing in Model.AvailableIngredients)
+                        {
+                            <option data-id="@ing.IngredientID" value="@ing.Name"></option>
+                        }
+                    }
+                </datalist>
+            </div>
+
+            <!-- Mengeneingabe inklusive Einheiten-Dropdown -->
+            <div>
+                <label class="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Menge & Einheit</label>
+                <div class="flex border border-stone-200 rounded-xl bg-[#fcfbfa] overflow-hidden focus-within:border-[#ff5c26] transition-all">
+                    <input type="number" name="amount" id="formAmount" min="1" required placeholder="z.B. 250" 
+                        class="w-full px-4 py-3 bg-transparent text-sm font-semibold focus:outline-none">
+                    <select name="unit" id="formUnit" class="bg-stone-50 px-3 text-xs font-bold uppercase tracking-wider text-stone-600 border-l border-stone-200 focus:outline-none cursor-pointer hover:bg-stone-100 transition-colors">
+                        <option value="g">g</option>
+                        <option value="ml">ml</option>
+                        <option value="Stk">Stk</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Mindesthaltbarkeitsdatum -->
+            <div>
+                <label class="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Haltbar bis</label>
+                <input type="date" name="expirationDate" id="formDate" required value="@DateTime.Today.ToString("yyyy-MM-dd")"
+                    class="w-full px-4 py-3 border border-stone-200 rounded-xl bg-[#fcfbfa] text-sm font-semibold focus:outline-none focus:border-[#ff5c26]">
+            </div>
+
+            <!-- Formular-Aktionen -->
+            <div class="flex space-x-2">
+                <button type="submit" id="formSubmitBtn" class="flex-1 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider text-white bg-[#ff5c26] hover:bg-[#e04b19] transition">
+                    Speichern
+                </button>
+                <button type="button" onclick="closeForm()" class="px-4 py-3 rounded-xl text-xs font-extrabold uppercase bg-stone-100 text-stone-600 hover:bg-stone-200 transition">
+                    X
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Filter-Statuspillen und Action-Button -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-6 border-t-2 border-[#1e1915]">
+        <div class="flex flex-wrap gap-2" id="filterContainer">
+            <button onclick="filterPantry('all')" data-filter="all" class="filter-btn px-4 py-1.5 rounded-full text-xs font-bold bg-[#1e1915] text-white transition-all">
+                Alle (@Model.PantryItems.Count())
+            </button>
+            <button onclick="filterPantry('fresh')" data-filter="fresh" class="filter-btn px-4 py-1.5 rounded-full text-xs font-bold bg-stone-100 text-stone-600 hover:bg-stone-200 transition-all">
+                Frisch (@Model.PantryItems.Count(i => (i.ExpirationDate.Date - DateTime.Today).Days > 3))
+            </button>
+            <button onclick="filterPantry('warning')" data-filter="warning" class="filter-btn px-4 py-1.5 rounded-full text-xs font-bold bg-stone-100 text-stone-600 hover:bg-stone-200 transition-all">
+                ⏳ Bald verbrauchen (@Model.PantryItems.Count(i => { var d = (i.ExpirationDate.Date - DateTime.Today).Days; return d >= 0 && d <= 3; }))
+            </button>
+            <button onclick="filterPantry('expired')" data-filter="expired" class="filter-btn px-4 py-1.5 rounded-full text-xs font-bold bg-stone-100 text-stone-600 hover:bg-stone-200 transition-all">
+                Abgelaufen (@Model.PantryItems.Count(i => (i.ExpirationDate.Date - DateTime.Today).Days < 0))
+            </button>
+        </div>
+        
+        <button onclick="openAddMode()" class="inline-flex items-center justify-center px-6 py-3 rounded-full text-xs font-extrabold uppercase tracking-wider text-white bg-[#ff5c26] hover:bg-[#e04b19] transition-all shadow-md shadow-[#ff5c26]/20 transform active:scale-95">
+            + Zutat hinzufügen
+        </button>
+    </div>
+
+    <!-- Vorrats-Tabelle -->
+    <div class="bg-white rounded-2xl border border-[#f1eee7] shadow-sm overflow-hidden">
+        @if (!Model.PantryItems.Any())
+        {
+            <div class="p-16 text-center">
+                <span class="text-5xl inline-block mb-4">🧊</span>
+                <p class="text-lg font-bold text-[#1e1915]">Deine Kammer ist leer.</p>
+                <p class="text-sm text-stone-400 mt-1">Füge Zutaten hinzu, um deine kulinarische Reise zu starten.</p>
+            </div>
+        }
+        else
+        {
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse table-fixed">
+                    <thead class="bg-stone-50/70 border-b border-[#f1eee7] text-stone-500 text-[11px] font-bold uppercase tracking-widest">
+                        <tr>
+                            <th class="px-8 py-4 w-[25%]">Zutat</th>
+                            <th class="px-8 py-4 text-right w-[15%]">Menge</th>
+                            <th class="px-8 py-4 w-[15%]">Haltbarkeit</th>
+                            <th class="px-8 py-4 w-[20%]">Status</th>
+                            <th class="px-8 py-4 text-right w-[25%]">Aktionen</th> 
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-[#f1eee7] text-sm text-[#1e1915]">
+                        @foreach (var item in Model.PantryItems)
+                        {
+                            var daysLeft = (item.ExpirationDate.Date - DateTime.Today).Days;
+                            string statusGroup = "fresh";
+                            if (daysLeft < 0) statusGroup = "expired";
+                            else if (daysLeft <= 3) statusGroup = "warning";
+
+                            <tr data-status="@statusGroup" class="pantry-row hover:bg-stone-50/40 transition-all duration-150 group">
+                                <td class="px-8 py-5 truncate">
+                                    <div class="font-bold text-base text-[#1e1915] group-hover:text-[#ff5c26] transition-colors">
+                                        @item.Name
+                                    </div>
+                                </td>
+                                <td class="px-8 py-5 text-right font-bold text-base tracking-tight text-stone-700 font-mono">
+                                    @item.Amount <span class="text-stone-400 font-sans text-xs font-medium">@item.Unit</span>
+                                </td>
+                                <td class="px-8 py-5 font-semibold text-stone-600 font-mono">
+                                    Bis @item.ExpirationDate.ToString("dd.MM.yyyy")
+                                </td>
+                                <td class="px-8 py-5 whitespace-nowrap">
+                                    @if (daysLeft < 0)
+                                    {
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs bg-rose-50 text-rose-700 border border-rose-100 font-bold">
+                                            Abgelaufen
+                                        </span>
+                                    }
+                                    else if (daysLeft <= 3)
+                                    {
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs bg-amber-50 text-amber-700 border border-amber-100 font-bold">
+                                            ⏳ Bald verbrauchen
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold">
+                                            Frisch
+                                        </span>
+                                    }
+                                </td>
+                                <td class="px-8 py-5 text-right text-xs font-bold tracking-wider uppercase space-x-3 whitespace-nowrap">
+                                    <button type="button" 
+                                            onclick="openEditMode('@item.PantryID', '@item.IngredientID', '@item.Name', '@item.Amount', '@item.Unit', '@item.ExpirationDate.ToString("yyyy-MM-dd")')"
+                                            class="inline-block text-stone-400 hover:text-[#1e1915] py-1 transition-colors">
+                                        Bearbeiten
+                                    </button>
+                                    
+                                    <form action="/Pantry/Delete" method="POST" class="inline-block">
+                                        <input type="hidden" name="id" value="@item.PantryID" />
+                                        <button type="button" onclick="confirmDelete(this)" 
+                                                class="text-stone-400 hover:text-rose-600 py-1 transition-all duration-200">
+                                            Entfernen
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // DOM-Elemente für die Formular-Steuerung zwischenspeichern
+        var formContainer = document.getElementById("addFormContainer");
+        var form = document.getElementById("pantryForm");
+        var formTitle = document.getElementById("formTitle");
+        var formSubmitBtn = document.getElementById("formSubmitBtn");
+        
+        var inputId = document.getElementById("formPantryId");
+        var inputSearch = document.getElementById("ingredientInput");
+        var inputHiddenId = document.getElementById("hiddenIngredientId");
+        var inputAmount = document.getElementById("formAmount");
+        var inputUnit = document.getElementById("formUnit");
+        var inputDate = document.getElementById("formDate");
+
+        // Schaltet das Formular in den "Hinzufügen"-Modus und setzt alle Felder zurück.
+        function openAddMode() {
+            form.action = "/Pantry/Add";
+            formTitle.innerText = "// Neue Zutat einlagern";
+            formSubmitBtn.innerText = "Speichern";
+            
+            inputId.value = "0";
+            inputSearch.value = "";
+            inputSearch.disabled = false;
+            
+            inputHiddenId.value = "0"; 
+            inputAmount.value = "";
+            inputDate.value = "@DateTime.Today.ToString("yyyy-MM-dd")";
+
+            formContainer.classList.remove("hidden");
+        }
+
+        // Schaltet das Formular in den "Bearbeiten"-Modus und befüllt es mit den Zeilen-Daten.
+        function openEditMode(pantryId, ingredientId, name, amount, unit, dateString) {
+            form.action = "/Pantry/Update";
+            formTitle.innerText = "// Zutat anpassen";
+            formSubmitBtn.innerText = "Änderung speichern";
+            
+            inputId.value = pantryId;
+            inputSearch.value = name;
+            inputSearch.disabled = true;
+            
+            inputHiddenId.value = ingredientId;
+            inputAmount.value = amount;
+            inputUnit.value = unit;
+            inputDate.value = dateString;
+
+            formContainer.classList.remove("hidden");
+            formContainer.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function closeForm() {
+            formContainer.classList.add("hidden");
+        }
+
+        // Filtert die Tabellenansicht im Client komplett ohne DB-Reloads (Instant-Feedback).
+        function filterPantry(status) {
+            var rows = document.querySelectorAll(".pantry-row");
+            rows.forEach(function(row) {
+                if (status === "all" || row.getAttribute("data-status") === status) {
+                    row.style.display = ""; 
+                } else {
+                    row.style.display = "none"; 
+                }
+            });
+
+            // Aktiven Filter-Button visuell hervorheben
+            var buttons = document.querySelectorAll(".filter-btn");
+            buttons.forEach(function(btn) {
+                if (btn.getAttribute("data-filter") === status) {
+                    btn.classList.remove("bg-stone-100", "text-stone-600", "hover:bg-stone-200");
+                    btn.classList.add("bg-[#1e1915]", "text-white");
+                } else {
+                    btn.classList.remove("bg-[#1e1915]", "text-white");
+                    btn.classList.add("bg-stone-100", "text-stone-600", "hover:bg-stone-200");
+                }
+            });
+        }
+
+        // Steuert den modernen 2-Klick-Löschvorgang direkt im Button ("Sicher?").
+        function confirmDelete(button) {
+            if (!button.classList.contains('is-confirming')) {
+                button.classList.add('is-confirming', 'text-rose-600', 'font-extrabold');
+                button.innerText = 'Sicher?';
+
+                // Nach 3 Sekunden Inaktivität den Zustand zurücksetzen
+                button.timeoutId = setTimeout(function() {
+                    button.classList.remove('is-confirming', 'text-rose-600', 'font-extrabold');
+                    button.innerText = 'Entfernen';
+                }, 3000);
+            } else {
+                clearTimeout(button.timeoutId);
+                button.closest('form').submit();
+            }
+        }
+
+        // Gleicht während des Tippens die Eingabe mit der Datalist ab, um die ID zu mappen.
+        inputSearch.addEventListener('input', function(e) {
+            var list = document.getElementById('ingredientsList');
+            var inputValue = e.target.value;
+            inputHiddenId.value = "0";
+
+            for (var i = 0; i < list.options.length; i++) {
+                var option = list.options[i];
+                if (option.value === inputValue) {
+                    inputHiddenId.value = option.getAttribute('data-id');
+                    break;
+                }
+            }
+        });
+    </script>
+}

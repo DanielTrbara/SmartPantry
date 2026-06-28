@@ -1,0 +1,54 @@
+@{
+    ViewData["Title"] = "Anmelden";
+}
+
+<div class="w-full max-w-md mx-auto my-8">
+    <div class="mb-10 text-center space-y-2">
+        <span class="text-6xl inline-block drop-shadow-sm transform hover:scale-110 transition-transform cursor-default">🥞</span>
+        <h1 class="text-3xl sm:text-4xl font-black text-[#1e1915] tracking-tight leading-none">
+            Gusto<span class="text-[#ff5c26]">Pantry.</span>
+        </h1>
+        <p class="text-sm text-stone-500 max-w-xs mx-auto leading-relaxed">
+            Deine digitale Vorratskammer & Rezeptverwaltung sauber organisiert.
+        </p>
+    </div>
+
+    <div class="bg-white p-8 rounded-2xl border-2 border-[#1e1915] shadow-md transition-all duration-300">
+        
+        <div class="mb-6">
+            <h2 class="text-lg font-bold text-[#1e1915] uppercase tracking-wider font-mono">Anmelden</h2>
+            <p class="text-xs text-stone-400 mt-1">Gib deine Benutzerdaten ein, um deinen Kühlschrank zu sehen.</p>
+        </div>
+
+        @if (ViewBag.Error != null)
+        {
+            <div class="mb-5 p-4 rounded-xl bg-rose-50 border border-rose-100 text-rose-700 text-xs font-bold flex items-center space-x-3">
+                <span class="text-sm">⚠️</span>
+                <span>@ViewBag.Error</span>
+            </div>
+        }
+
+        <form action="/Account/Login" method="POST" class="space-y-5">
+            <div>
+                <label for="username" class="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Benutzername</label>
+                <input id="username" name="username" type="text" required 
+                       class="block w-full px-4 py-3 border border-stone-200 rounded-xl bg-[#fcfbfa] text-[#1e1915] placeholder-stone-400 font-semibold focus:outline-none focus:border-[#ff5c26] transition-all text-sm appearance-none" 
+                       placeholder="z.B. Daniel">
+            </div>
+
+            <div>
+                <label for="password" class="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Passwort</label>
+                <input id="password" name="password" type="password" required 
+                       class="block w-full px-4 py-3 border border-stone-200 rounded-xl bg-[#fcfbfa] text-[#1e1915] placeholder-stone-400 font-semibold focus:outline-none focus:border-[#ff5c26] transition-all text-sm appearance-none" 
+                       placeholder="••••••••">
+            </div>
+
+            <div class="pt-2">
+                <button type="submit" 
+                        class="w-full flex justify-center py-3.5 px-4 rounded-xl text-xs font-extrabold uppercase tracking-wider text-white bg-[#ff5c26] hover:bg-[#e04b19] transition-all shadow-md shadow-[#ff5c26]/10 transform active:scale-95">
+                    Anmeldung bestätigen
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

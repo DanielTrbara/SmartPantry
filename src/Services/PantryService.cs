@@ -19,7 +19,6 @@ namespace src.Services
 
             using (var conn = _dbService.GetConnection())
             {
-                // HIER binden wir deine Scalar Function datrit02_fn_GetExpirationStatus direkt im SELECT ein!
                 string query = @"
                     SELECT p.PantryID, p.UserID, p.IngredientID, i.Name, p.Amount, p.ExpirationDate,
                         db_owner.datrit02_fn_GetExpirationStatus(p.ExpirationDate) AS ExpirationStatus
@@ -44,7 +43,6 @@ namespace src.Services
                                 Name = reader.GetString(3),
                                 Amount = reader.GetInt32(4),
                                 ExpirationDate = reader.GetDateTime(5),
-                                // Hier fangen wir den berechneten Status ('ROT', 'GELB', 'GRÜN') aus der DB ab!
                                 Status = reader.GetString(6) 
                             };
 
@@ -97,20 +95,17 @@ namespace src.Services
         {
             using (var conn = _dbService.GetConnection())
             {
-                // Wir übergeben den Namen der Stored Procedure anstelle eines SQL-Strings
                 using (var cmd = new SqlCommand("db_owner.datrit02_sp_AddIngredientToPantry", conn))
                 {
-                    // WICHTIG: Dem Command sagen, dass es eine Stored Procedure ausführen soll
                     cmd.CommandType = System.Data.CommandType.StoredProcedure;
 
-                    // Die Parameter exakt so benennen, wie sie in deiner stored_procedure.sql definiert sind
                     cmd.Parameters.AddWithValue("@UserID", userId);
                     cmd.Parameters.AddWithValue("@IngredientID", ingredientId);
                     cmd.Parameters.AddWithValue("@Amount", amount);
                     cmd.Parameters.AddWithValue("@ExpirationDate", expirationDate.Date);
 
                     conn.Open();
-                    cmd.ExecuteNonQuery(); // Führt die Prozedur auf dem SQL Server aus
+                    cmd.ExecuteNonQuery();
                 }
             }
         }
@@ -160,7 +155,6 @@ namespace src.Services
         {
             using (var conn = _dbService.GetConnection())
             {
-                // 1. Schauen, ob die Zutat (ignoriere Leerzeichen & Groß-/Kleinschreibung) schon existiert
                 string selectQuery = "SELECT IngredientID FROM datrit02_Ingredients WHERE LOWER(TRIM(Name)) = LOWER(TRIM(@Name))";
                 
                 using (var cmd = new SqlCommand(selectQuery, conn))
@@ -171,19 +165,17 @@ namespace src.Services
                     
                     if (result != null)
                     {
-                        return (int)result; // Zutat existiert schon -> ID zurückgeben
+                        return (int)result;
                     }
                 }
 
-                // 2. Wenn sie nicht existiert: Neu anlegen und die frische ID direkt abgreifen
                 string insertQuery = @"
                     INSERT INTO datrit02_Ingredients (Name) VALUES (TRIM(@Name));
-                    SELECT SCOPE_IDENTITY();"; // Holt die exakt gerade generierte ID
+                    SELECT SCOPE_IDENTITY();";
 
                 using (var cmd = new SqlCommand(insertQuery, conn))
                 {
                     cmd.Parameters.AddWithValue("@Name", name);
-                    // Verbindung ist hier noch zu, wir öffnen sie neu (oder lassen sie offen)
                     var newId = cmd.ExecuteScalar();
                     return Convert.ToInt32(newId);
                 }
@@ -214,7 +206,6 @@ namespace src.Services
                         {
                             int recipeId = reader.GetInt32(0);
 
-                            // Wenn das Rezept noch nicht im Dictionary ist, neu anlegen
                             if (!recipesMap.TryGetValue(recipeId, out var recipe))
                             {
                                 recipe = new Recipe
@@ -227,7 +218,6 @@ namespace src.Services
                                 recipesMap[recipeId] = recipe;
                             }
 
-                            // Wenn eine Zutat verknüpft ist, diese dem Rezept hinzufügen
                             if (!reader.IsDBNull(3))
                             {
                                 var ingDetail = new RecipeIngredientDetail
@@ -237,7 +227,6 @@ namespace src.Services
                                     DefaultAmount = reader.GetInt32(5)
                                 };
 
-                                // Dynamische Einheit zuweisen (identisch zur Pantry-Logik)
                                 if (ingDetail.Name.ToLower().Contains("milch") || ingDetail.Name.ToLower().Contains("wasser"))
                                     ingDetail.Unit = "ml";
                                 else if (ingDetail.Name.ToLower().Contains("ei") || ingDetail.Name.ToLower().Contains("stück"))
@@ -265,7 +254,6 @@ namespace src.Services
                 {
                     try
                     {
-                        // 1. Lazy Creation & Verifizierung der Zutatennamen
                         foreach (var item in cookedIngredients)
                         {
                             if (item.ActualAmount <= 0) continue;
@@ -283,7 +271,6 @@ namespace src.Services
                                 }
                                 else
                                 {
-                                    // Zutat existiert gar nicht in den globalen Stammdaten (z.B. Mehl / Eier) -> Erstellen!
                                     string insertQuery = "INSERT INTO datrit02_Ingredients (Name) VALUES (TRIM(@Name)); SELECT SCOPE_IDENTITY();";
                                     using (var insertCmd = new SqlCommand(insertQuery, conn, transaction))
                                     {
@@ -293,16 +280,13 @@ namespace src.Services
                                 }
                             }
 
-                            // ID aktualisieren, falls der User ein Substitut eingetippt hat
                             item.IngredientID = resolvedId;
                         }
 
-                        // 2. Bestandsprüfung & Automatisches Ad-Hoc Einlagern bei Spontankäufen/Ersetzungen
                         foreach (var item in cookedIngredients)
                         {
                             if (item.ActualAmount <= 0) continue;
 
-                            // Aktuellen Gesamtbestand des Users für diese Zutat prüfen
                             string sumQuery = "SELECT SUM(Amount) FROM datrit02_Pantry WHERE UserID = @UserID AND IngredientID = @IngredientID";
                             int availableAmount = 0;
                             using (var cmd = new SqlCommand(sumQuery, conn, transaction))
@@ -313,7 +297,6 @@ namespace src.Services
                                 if (sumRes != DBNull.Value && sumRes != null) availableAmount = Convert.ToInt32(sumRes);
                             }
 
-                            // Wenn der physische Schrank leer ist (oder zu wenig drin ist), lagern wir die Differenz ad hoc ein
                             if (availableAmount < item.ActualAmount)
                             {
                                 int missingAmount = item.ActualAmount - availableAmount;
@@ -327,14 +310,12 @@ namespace src.Services
                                     cmd.Parameters.AddWithValue("@UserID", userId);
                                     cmd.Parameters.AddWithValue("@IngredientID", item.IngredientID);
                                     cmd.Parameters.AddWithValue("@Amount", missingAmount);
-                                    // Standardmäßig 7 Tage haltbar machen ab heute
                                     cmd.Parameters.AddWithValue("@ExpirationDate", DateTime.Today.AddDays(7)); 
                                     cmd.ExecuteNonQuery();
                                 }
                             }
                         }
 
-                        // 3. Koch-Eintrag in die Historie (datrit02_CookedHistory) schreiben
                         int cookId = 0;
                         string historyQuery = @"
                             INSERT INTO datrit02_CookedHistory (UserID, RecipeID, CookedAt) 
@@ -348,7 +329,6 @@ namespace src.Services
                             cookId = Convert.ToInt32(cmd.ExecuteScalar());
                         }
 
-                        // 4. Verbrauch loggen. HIER feuert jetzt dein SQL-Trigger und zieht EXAKT 1-mal ab!
                         foreach (var item in cookedIngredients)
                         {
                             if (item.ActualAmount <= 0) continue;
@@ -384,7 +364,6 @@ namespace src.Services
                 {
                     try
                     {
-                        // 1. Rezept-Stammdaten eintragen und neue RecipeID holen
                         int recipeId = 0;
                         string insertRecipeQuery = @"
                             INSERT INTO datrit02_Recipes (RecipeName, Description) 
@@ -398,7 +377,6 @@ namespace src.Services
                             recipeId = Convert.ToInt32(cmd.ExecuteScalar());
                         }
 
-                        // 2. Zutaten verarbeiten (falls welche hinzugefügt wurden)
                         if (command.Ingredients != null)
                         {
                             foreach (var ingInput in command.Ingredients)
@@ -407,7 +385,6 @@ namespace src.Services
 
                                 int ingredientId = 0;
 
-                                // Lazy Creation: Prüfen ob Zutat existiert
                                 string checkIngQuery = "SELECT IngredientID FROM datrit02_Ingredients WHERE LOWER(TRIM(Name)) = LOWER(TRIM(@Name))";
                                 using (var cmd = new SqlCommand(checkIngQuery, conn, transaction))
                                 {
@@ -416,7 +393,6 @@ namespace src.Services
                                     if (res != null) ingredientId = (int)res;
                                 }
 
-                                // Falls nicht existent, neu anlegen
                                 if (ingredientId == 0)
                                 {
                                     string insertIngQuery = "INSERT INTO datrit02_Ingredients (Name) VALUES (TRIM(@Name)); SELECT SCOPE_IDENTITY();";
@@ -427,7 +403,6 @@ namespace src.Services
                                     }
                                 }
 
-                                // 3. Koppeltabelle datrit02_RecipeIngredients befüllen
                                 string insertRelationQuery = @"
                                     INSERT INTO datrit02_RecipeIngredients (RecipeID, IngredientID, DefaultAmount) 
                                     VALUES (@RecipeID, @IngredientID, @DefaultAmount)";

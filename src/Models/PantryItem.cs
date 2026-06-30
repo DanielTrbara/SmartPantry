@@ -9,5 +9,6 @@ namespace src.Models
         public int Amount { get; set; }
         public string Unit { get; set; } = "g";
         public DateTime ExpirationDate { get; set; }
+        public string Status { get; set; } = string.Empty;
     }
 }

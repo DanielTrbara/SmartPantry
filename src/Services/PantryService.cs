@@ -12,15 +12,17 @@ namespace src.Services
             _dbService = dbService;
         }
 
-        // Vorräte für einen bestimmten User holen
+        // Vorräte für einen bestimmten User holen inklusive datenbankseitiger Ampelberechnung
         public List<PantryItem> GetPantryForUser(int userId)
         {
             var items = new List<PantryItem>();
 
             using (var conn = _dbService.GetConnection())
             {
+                // HIER binden wir deine Scalar Function datrit02_fn_GetExpirationStatus direkt im SELECT ein!
                 string query = @"
-                    SELECT p.PantryID, p.UserID, p.IngredientID, i.Name, p.Amount, p.ExpirationDate 
+                    SELECT p.PantryID, p.UserID, p.IngredientID, i.Name, p.Amount, p.ExpirationDate,
+                        db_owner.datrit02_fn_GetExpirationStatus(p.ExpirationDate) AS ExpirationStatus
                     FROM datrit02_Pantry p
                     INNER JOIN datrit02_Ingredients i ON p.IngredientID = i.IngredientID
                     WHERE p.UserID = @UserID";
@@ -41,7 +43,9 @@ namespace src.Services
                                 IngredientID = reader.GetInt32(2),
                                 Name = reader.GetString(3),
                                 Amount = reader.GetInt32(4),
-                                ExpirationDate = reader.GetDateTime(5)
+                                ExpirationDate = reader.GetDateTime(5),
+                                // Hier fangen wir den berechneten Status ('ROT', 'GELB', 'GRÜN') aus der DB ab!
+                                Status = reader.GetString(6) 
                             };
 
                             // Dynamische Einheit zuweisen
@@ -88,41 +92,25 @@ namespace src.Services
             return ingredients;
         }
 
-        // Neue Zutat hinzufügen oder Menge erhöhen (Upsert)
+        // Neue Zutat hinzufügen oder Menge erhöhen über die serverseitige Stored Procedure
         public void UpsertPantryItem(int userId, int ingredientId, int amount, DateTime expirationDate)
         {
             using (var conn = _dbService.GetConnection())
             {
-                // FIX: CAST auf DATE verhindert fehlerhafte Vergleiche durch Uhrzeit-Differenzen in der DB
-                string query = @"
-                    IF EXISTS (
-                        SELECT 1 FROM datrit02_Pantry 
-                        WHERE UserID = @UserID 
-                        AND IngredientID = @IngredientID 
-                        AND CAST(ExpirationDate AS DATE) = CAST(@ExpirationDate AS DATE)
-                    )
-                    BEGIN
-                        UPDATE datrit02_Pantry 
-                        SET Amount = Amount + @Amount 
-                        WHERE UserID = @UserID 
-                        AND IngredientID = @IngredientID 
-                        AND CAST(ExpirationDate AS DATE) = CAST(@ExpirationDate AS DATE)
-                    END
-                    ELSE
-                    BEGIN
-                        INSERT INTO datrit02_Pantry (UserID, IngredientID, Amount, ExpirationDate) 
-                        VALUES (@UserID, @IngredientID, @Amount, CAST(@ExpirationDate AS DATE))
-                    END";
-
-                using (var cmd = new SqlCommand(query, conn))
+                // Wir übergeben den Namen der Stored Procedure anstelle eines SQL-Strings
+                using (var cmd = new SqlCommand("db_owner.datrit02_sp_AddIngredientToPantry", conn))
                 {
+                    // WICHTIG: Dem Command sagen, dass es eine Stored Procedure ausführen soll
+                    cmd.CommandType = System.Data.CommandType.StoredProcedure;
+
+                    // Die Parameter exakt so benennen, wie sie in deiner stored_procedure.sql definiert sind
                     cmd.Parameters.AddWithValue("@UserID", userId);
                     cmd.Parameters.AddWithValue("@IngredientID", ingredientId);
                     cmd.Parameters.AddWithValue("@Amount", amount);
                     cmd.Parameters.AddWithValue("@ExpirationDate", expirationDate.Date);
 
                     conn.Open();
-                    cmd.ExecuteNonQuery();
+                    cmd.ExecuteNonQuery(); // Führt die Prozedur auf dem SQL Server aus
                 }
             }
         }
